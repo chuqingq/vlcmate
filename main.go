@@ -31,11 +31,17 @@ func main() {
 	// new vlc control instance
 	instance, _ := vlcctrl.NewVLC("127.0.0.1", 8080, "password")
 
-	// if there is config.LastPlayedItem
+	// restore playing last item
 	if config.Playing != "" {
-		err = instance.AddStart(config.Playing)
-		if err != nil {
+		// 因为vlc可能还没启动成功，因此重试3秒
+		start := time.Now()
+		for time.Now().Sub(start) <= 3*time.Second {
+			err = instance.AddStart(config.Playing)
+			if err == nil {
+				break
+			}
 			log.Printf("add error: %v", err)
+			time.Sleep(500 * time.Millisecond)
 		}
 
 		err = instance.Seek(strconv.Itoa(config.Position))
@@ -48,6 +54,9 @@ func main() {
 		if err != nil {
 			log.Printf("seek error: %v", err)
 		}
+
+		AddRelatedItems(instance, config.Playing)
+		Skip(instance, config.Position, config.BeginSkip, config.EndSkip)
 	}
 
 	for {
@@ -60,11 +69,10 @@ func main() {
 			continue
 		}
 
-		// 如果正在播放的项目有变化，则把相关项目（且原本不在播放列表中的）添加到播放列表
-		if file != "" && file != config.Playing {
-			log.Printf("playingitem %v -> %v", config.Playing, file)
-			AddRelatedItems(instance, file)
-		}
+		// 把相关项目添加到播放列表
+		AddRelatedItems(instance, file)
+
+		Skip(instance, pos, config.BeginSkip, config.EndSkip)
 
 		// 更新config
 		if file != config.Playing || config.Position != pos {
@@ -165,14 +173,15 @@ type Status struct {
 	Length int `json:"length"`
 }
 
-var dirAlreadyAdded = map[string]bool{}
+// 缓存上次添加相关项目的路径
+var dirAlreadyAdded string
 
 // 把当前正在播放项目的相关项目添加到播放列表
 func AddRelatedItems(instance vlcctrl.VLC, current string) error {
 	current = filepath.FromSlash(strings.TrimPrefix(current, "file:///"))
 	dir := filepath.Dir(current)
 	// 如果目录已添加，则无需再次添加
-	if dirAlreadyAdded[dir] {
+	if dir == dirAlreadyAdded {
 		return nil
 	}
 	ext := filepath.Ext(current)
@@ -209,6 +218,17 @@ func AddRelatedItems(instance vlcctrl.VLC, current string) error {
 		}
 	}
 
-	dirAlreadyAdded[dir] = true
+	dirAlreadyAdded = dir
+	log.Printf("dirAlreadyAdded: %v", dirAlreadyAdded)
 	return nil
+}
+
+// Skip 调过片头和片尾
+func Skip(instance vlcctrl.VLC, pos, beginSkip, endSkip int) {
+	if beginSkip != 0 && pos < beginSkip {
+		instance.Seek(strconv.Itoa(beginSkip))
+	} else if endSkip != 0 && pos > endSkip {
+		instance.Next()
+		instance.Seek(strconv.Itoa(beginSkip))
+	}
 }
