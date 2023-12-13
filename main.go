@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +36,7 @@ func main() {
 	if config.Playing != "" {
 		// 因为vlc可能还没启动成功，因此重试3秒
 		start := time.Now()
-		for time.Now().Sub(start) <= 3*time.Second {
+		for time.Since(start) <= 3*time.Second {
 			err = instance.AddStart(config.Playing)
 			if err == nil {
 				break
@@ -79,6 +80,7 @@ func main() {
 			config.Playing = file
 			config.Position = pos
 			config.Save()
+			log.Printf("config update: %#v", config)
 		}
 	}
 }
@@ -178,7 +180,12 @@ var dirAlreadyAdded string
 
 // 把当前正在播放项目的相关项目添加到播放列表
 func AddRelatedItems(instance vlcctrl.VLC, current string) error {
-	current = filepath.FromSlash(strings.TrimPrefix(current, "file:///"))
+	if current == "" {
+		return nil
+	}
+	current = strings.TrimPrefix(current, "file:///")
+	current = filepath.FromSlash(current)
+	current, _ = url.PathUnescape(current)
 	dir := filepath.Dir(current)
 	// 如果目录已添加，则无需再次添加
 	if dir == dirAlreadyAdded {
