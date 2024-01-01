@@ -1,4 +1,4 @@
-module test_go
+module vlcmate
 
 go 1.20
 
