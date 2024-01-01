@@ -199,6 +199,7 @@ func AddRelatedItems(instance vlcctrl.VLC, current string) error {
 		log.Printf("readdir error: %v", err)
 		return err
 	}
+	log.Printf("entries: %v", entries)
 
 	// instance.EmptyPlaylist()
 	start := false
@@ -217,11 +218,13 @@ func AddRelatedItems(instance vlcctrl.VLC, current string) error {
 		if !start {
 			continue
 		}
-		err = instance.Add(add)
+		log.Printf("add: %v", add)
+		err = instance.Add(url.PathEscape(add))
 		if err != nil {
-			return err
+			log.Printf("add item error: %v, %v", err, add)
+			// return err
 		} else {
-			log.Printf("add item: %v", add)
+			log.Printf("add item success: %v", add)
 		}
 	}
 
